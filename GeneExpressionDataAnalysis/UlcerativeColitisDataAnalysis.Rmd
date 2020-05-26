@@ -1,0 +1,291 @@
+---
+title: "Analysis of gene expression studies for Ulcerative Colitis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+This folder contains the code for reproducing the  the results found in  the "Gene expression analysis for Ulcerative Colitis" section of the paper. 
+
+
+
+We start by loading the z-scores,  and sourcing the functions used for the computation of the mixture components and est-OMT-FDR.  
+
+
+```{r}
+
+load("ZmatrixForUlcerativeColitisDataAnalysis.Rdata")
+source("functions.R")
+
+print(head(Zmatrix))
+K = dim(Zmatrix)[1] #the number of z-scores
+print(K)
+alpha = 0.05 #the nominal level of the FDR 
+
+
+
+```
+
+## Up regulated genes
+
+The z-scores for testing up regulated of genes in the meta-analysis discovery study
+```{r}
+zv = Zmatrix[,1] #the z-scores for up regulation: qnorm(up-regulation-p-value)
+
+```
+
+
+
+We estimate the mixture parameters and find the optimal mu for the z-scores from the discovery study. The search for optimal mu takes a while.  
+
+```{r, eval= FALSE}
+
+out = mixFdr(zv, J=5, theonull=TRUE, nearlyNull = 0, maxIter = 1000000, tol = 0.0000001)
+propvec = out$pi
+print(propvec)
+cvvec = out$mu
+print(cvvec)
+sigmavec = out$sigma
+print(sigmavec)
+ 
+
+
+
+  #For est-OMT-FDR: search for the optimal mu given the mixture parameter
+  mus = seq(2550,2650,5)
+  murange = 100
+  muOMT = findmuOMT(K, propvec, cvvec, sigmavec, alternative = "less", alpha = 0.05, mus = mus, murange=murange, maxiter= 10000) 
+    
+print(muOMT)    
+
+
+
+```
+
+The above chunk can take few hours. The values I obtained from this chunk to be used for inference are as follows. A rerun of the above chunk should produce very similar results for the 
+parameters muOMT, propvec, cvvec, sigmavec given below. 
+
+```{r}
+muOMT = 2614.186
+propvec = c(0.55639520, 0.27011088, 0.03862919, 0.08688245, 0.04798228)
+cvvec = c(0.000000,  2.752976,  6.013433, -3.322166, -6.083948)
+sigmavec = c(1.000000, 1.010029, 1.000000, 1.000000, 1.000000)
+
+```
+
+Compute the number of rejections with each method. 
+
+```{r}
+
+
+rejmat = matrix(0, nrow = length(zv), ncol =4)
+colnames(rejmat) = c("est-OMT-FDR", "est-OMT-mFDR", "adaptive BH", "BH")
+
+Pz = marg.dense2sidedalternative(zv,propvec, cvvec, sigmavec)
+Tz = scaled.null.dens(zv,propvec, cvvec, sigmavec, alternative ="less")/Pz 
+o = order(Tz)
+rTz = rank(Tz)
+oTz = sort(Tz)
+
+maxK = ifelse(K>200, max(round(K*(1-propvec[1])),200),K)
+az = 1-oTz[1:maxK]
+bz = BZCpp(oTz[1:maxK])
+Rz = az-muOMT*bz
+Dz = DCpp(Rz)
+
+rejmat[,1] = c(Dz, rep(0, length(Tz)-length(Dz)))[rTz]
+
+
+
+
+
+  #---number of discoveries by competitors: 
+  #est-OMT-mFDR
+ numrej = max(which(cumsum(oTz)/(1:length(oTz))<alpha))
+ rejmat[,2] = Tz<=oTz[numrej]
+  
+ 
+ 
+#abh 
+rejmat[,3]=p.adjust(p.adjust(pnorm(zv), method = "BH")<=(0.05/sum(propvec[cvvec>=0])))
+
+#bh 
+rejmat[,4]=p.adjust(p.adjust(pnorm(zv), method = "BH")<=(0.05))
+ 
+print(apply(rejmat,2,sum) ) 
+
+
+
+table(rejmat[,1], rejmat[,2]) 
+table(rejmat[,1], rejmat[,3]) 
+table(rejmat[,1], rejmat[,4])
+
+```
+
+
+The agreement is good and est-OMT-FDR makes the most rejections. Of course, more rejections does not guarantee more true rejections. A validation dataset is provided. 
+We conisder as "ground truth" all discoveries using BH on the Fisher combined test statistics from the discovery and validation dataset. We can assess how many of the rejections that are not shared by other methods are indeed in the "ground truth". 
+
+
+
+```{r}
+
+vz = Zmatrix[,3] #validation z-scores
+fisherleft = 1-pchisq(-2*log(pnorm(vz))-2*log(pnorm(zv)), 4)
+pfisher = pmin(fisherleft)
+hf = p.adjust(pfisher, method="BH")<=0.05
+table(hf)
+print(apply(rejmat[hf==1,],2,sum) ) 
+table(rejmat[,1],hf)
+table(hf[rejmat[,1]==1 & rejmat[,2]==0])
+table(hf[rejmat[,1]==1 & rejmat[,3]==0])
+
+```
+
+Out of the 2409 discoveries by est-OMT-FDR based on the discovery meta-analysis study only, 2276 are in the "ground truth" which is based on the discovery and validation meta-analyses. Thus, only 133/2409 = 0.055 are not in the "ground truth".  
+Out of 104 rejections by est-OMT-FDR but not est-OMT-mFDR, 57 are in the "ground truth"; Out of 145 rejections by est-OMT-FDR but not adaptive BH, 87 are in the "ground truth". The "ground truth" contains 2976 discoveries out of 15247 hypotheses tested,  and the discoveries by est-OMT-FDR but not a competitor tend to be in the ``ground truth". These comparisons with the "ground truth"  suggest that est-OMT-FDR contributes more true rejections than the other methods, without severely inflating the fraction of false positives.   
+
+
+For Table 3 in the main manuscript
+```{r}
+library(xtable)
+xtable(rbind(apply(rejmat,2,sum),apply(rejmat[hf==1,],2,sum), apply(rejmat[hf==1,],2,sum)/apply(rejmat,2,sum)))
+
+```
+
+
+## Down regulated genes
+
+The z-scores for testing up regulated of genes in the meta-analysis discovery study
+```{r}
+
+
+zv = Zmatrix[,2] #the z-scores for up regulation: qnorm(down-regulation-p-value)
+
+
+```
+
+
+
+We estimate the mixture parameters and find the optimal mu for the z-scores from the discovery study. The search for optimal mu takes a while.  
+
+```{r, eval= FALSE}
+
+out = mixFdr(zv, J=5, theonull=TRUE, nearlyNull = 0, maxIter = 1000000, tol = 0.0000001)
+propvec = out$pi
+print(propvec)
+cvvec = out$mu
+print(cvvec)
+sigmavec = out$sigma
+print(sigmavec)
+ 
+
+
+
+  #For est-OMT-FDR: search for the optimal mu given the mixture parameter
+  mus = seq(3500,5500,5)
+  murange = 500
+  muOMT = findmuOMT(K, propvec, cvvec, sigmavec, alternative = "less", alpha = 0.05, mus = mus, murange=murange, maxiter= 10000) 
+    
+print(muOMT)    
+
+
+
+```
+
+
+
+
+The above chunk can take few hours. The values I obtained from this chunk to be used for inference are as follows. A rerun of the above chunk should produce very similar results for the 
+parameters muOMT, propvec, cvvec, sigmavec given below. 
+
+```{r}
+muOMT = 4986.206
+propvec = c(0.62610331, 0.09856643, 0.03732802, 0.12906553, 0.10893670)
+cvvec = c(0.000000, -2.793785, -5.522162,  2.665926,  4.416314)
+sigmavec = c(1.000000, 1.000000, 1.242963, 1.000000, 1.434321)
+
+```
+
+Compute the number of rejections with each method. 
+
+```{r}
+
+
+rejmat = matrix(0, nrow = length(zv), ncol =4)
+colnames(rejmat) = c("est-OMT-FDR", "est-OMT-mFDR", "adaptive BH", "BH")
+
+Pz = marg.dense2sidedalternative(zv,propvec, cvvec, sigmavec)
+Tz = scaled.null.dens(zv,propvec, cvvec, sigmavec, alternative ="less")/Pz 
+o = order(Tz)
+rTz = rank(Tz)
+oTz = sort(Tz)
+
+maxK = ifelse(K>200, max(round(K*(1-propvec[1])),200),K)
+az = 1-oTz[1:maxK]
+bz = BZCpp(oTz[1:maxK])
+Rz = az-muOMT*bz
+Dz = DCpp(Rz)
+
+rejmat[,1] = c(Dz, rep(0, length(Tz)-length(Dz)))[rTz]
+
+
+
+
+
+  #---number of discoveries by competitors: 
+  #est-OMT-mFDR
+ numrej = max(which(cumsum(oTz)/(1:length(oTz))<alpha))
+ rejmat[,2] = Tz<=oTz[numrej]
+  
+ 
+ 
+#abh 
+rejmat[,3]=p.adjust(p.adjust(pnorm(zv), method = "BH")<=(0.05/sum(propvec[cvvec>=0])))
+
+#bh 
+rejmat[,4]=p.adjust(p.adjust(pnorm(zv), method = "BH")<=(0.05))
+
+print(apply(rejmat,2,sum) ) 
+table(rejmat[,1], rejmat[,2]) 
+table(rejmat[,1], rejmat[,3]) 
+table(rejmat[,1], rejmat[,4])
+
+```
+
+
+The agreement is good and est-OMT-FDR makes the most rejections. Of course, more rejections does not guarantee more true rejections. A validation dataset is provided. 
+We conisder as "ground truth" all discoveries using BH on the Fisher combined test statistics from the discovery and validation dataset. We can assess how many of the rejections that are not shared by other methods are indeed in the "ground truth". 
+
+
+
+```{r}
+
+vz = Zmatrix[,4] #validation z-scores
+fisherleft = 1-pchisq(-2*log(pnorm(vz))-2*log(pnorm(zv)), 4)
+pfisher = pmin(fisherleft)
+hf = p.adjust(pfisher, method="BH")<=0.05
+table(hf)
+table(rejmat[,1],hf)
+table(hf[rejmat[,1]==1 & rejmat[,2]==0])
+table(hf[rejmat[,1]==1 & rejmat[,3]==0])
+
+```
+
+Out of the 2023  discoveries by est-OMT-FDR based on the discovery meta-analysis study only,  1815 are in the "ground truth" which is based on the discovery and validation meta-analyses. Thus, only 208/2023 = 0.103 are not in the "ground truth".  
+Out of 126 rejections by est-OMT-FDR but not est-OMT-mFDR, 84 are in the "ground truth"; Out of 186 rejections by est-OMT-FDR but not adaptive BH, 116 are in the "ground truth". The "ground truth" contains 2897 discoveries out of 15247 hypotheses tested,  and the discoveries by est-OMT-FDR but not a competitor tend to be in the ``ground truth". These comparisons with the "ground truth"  suggest that est-OMT-FDR contributes more true rejections than the other methods, without severely inflating the fraction of false positives.   
+
+
+
+For Table 3 in the main manuscript
+```{r}
+library(xtable)
+xtable(rbind(apply(rejmat,2,sum),apply(rejmat[hf==1,],2,sum), apply(rejmat[hf==1,],2,sum)/apply(rejmat,2,sum)))
+
+
+
+```

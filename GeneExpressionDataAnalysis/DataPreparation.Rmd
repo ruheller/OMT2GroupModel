@@ -1,0 +1,169 @@
+---
+title: "Data Preparation"
+output: html_document
+---
+
+
+
+This folder contains instructions and the code to  create the z-scores used for analysis in the "Gene expression analysis in the ADEPTUS database" and "Gene expression analysis of ulcerative colitis" sections of the paper.
+
+To reproduce the results found in the above-mentioned sections of the paper, you can use the already processed data, in which case you only need to run the analyses described in the files **AdeptusDataAnalysis.html** and **UlcerativeColitisDataAnalysis.html**  with the following input data: 
+
+* **ZmatrixForAdeptusDataAnalysis.Rdata** (readable by R) contains the z-scores for the 20 studies analysed in the "Gene expression analysis in the ADEPTUS database" section of the paper. 
+
+* **ZmatrixForUlcerativeColitisDataAnalysis.Rdata** (readable by R) contains the z-scores for the discovery meta-analysis study and the validation meta-analysis study analysed in the "Gene expression analysis of ulcerative colitis" section of the paper. 
+
+
+## Preparing **ZmatrixForAdeptusDataAnalysis.Rdata**
+
+Prepare the data yourself by downloading **gene_dataset_p_matrices.RData** from the **ADEPTUS** website <http://adeptus.cs.tau.ac.il/downloads> and running the following R code chunk. 
+```{r}
+
+load("gene_dataset_p_matrices.Rdata")
+
+#find the number of unique studies
+fullstudyname = NULL
+for(i in 1:length(gene_dataset_p_matrices)){
+fullstudyname = c(fullstudyname, names(gene_dataset_p_matrices[[i]]))
+}
+print(length(fullstudyname))#1925 studies
+K = length(unique(fullstudyname))#149 unique studies.
+print(K)
+
+
+#number of genes
+m = dim(gene_dataset_p_matrices[[1]][[1]])[1]
+print(m)
+
+
+#put the one-sided p-values for each study into an mXK matrix
+pvmat = matrix(NA, nrow = m, ncol =K)
+pvmat2sided = matrix(NA, nrow = m, ncol =K)
+ufullstudyname = unique(fullstudyname)
+uindex = 0
+colnamespvmat = NULL
+for(i in 1:length(gene_dataset_p_matrices)){
+  l = gene_dataset_p_matrices[[i]]
+  if(length(l)==0){next}
+  for(j in 1:length(l)){
+    if (match(names(l)[j], ufullstudyname)>uindex){
+      uindex = uindex+1
+      pvmat[,uindex] = l[[j]][,2]
+      pvmat2sided[,uindex] = l[[j]][,1]
+      colnamespvmat = c(colnamespvmat, names(l)[j])
+    }
+  }
+}
+colnames(pvmat) = colnamespvmat
+
+#transfrom the pvalue matrix to a z-score matrix, putting -10 instead of -infinity (one-sided pvalue on zero) and 10 instead of infinity (one-sided pvalue of one)
+zvmat =qnorm(pvmat) 
+for (i in 1:dim(pvmat)[2]){
+     sub = which(zvmat[,i]<(-10))
+     zvmat[sub,i] = -10
+     sub = which(zvmat[,i]>(10))
+     zvmat[sub,i] = 10
+}
+#in order to select a subset of studies that are not too sparse (estimated fraction of nonnulls at least 0.15, so est-OMT-FDR and est-OMT-pFDR likely to coincide and we shall only consider est-OMT-FDR in the analysis) or too dense (estimated fraction of nonnulls at most 0.4, since otherwise suspect the theoretical null is problematic) and with values not too extreme (exclude studies with pvalues exactly zero or one for simplicity), we compute the conservative version of storey's plug-in estimator for each study, with parameter lambda = 0.05, as well as the number of pvalues at zero or one. 
+pimat = NULL 
+for (i in 1:dim(zvmat)[2]){
+     zv = zvmat[,i]
+     pv = pvmat[,i]
+     p0storey = (sum(2*pmin(pv, 1-pv)>0.05)+1)/(m*0.95)
+     pimat = rbind(pimat, c(i, 1-p0storey, sum(zv==10), sum(zv==-10)))
+} 
+print(head(pimat))
+
+pimatsub = pimat[pimat[,2]>=0.15 & pimat[,2]<=0.4 & pimat[,3]==0 & pimat[,4]==0,]
+print(dim(pimatsub))
+print(ufullstudyname[pimatsub[,1]])
+Zmatrix  = zvmat[,pimatsub[,1]]
+print(head(Zmatrix))
+print(dim(Zmatrix))
+#save(Zmatrix, file ="ZmatrixForAdeptusDataAnalysis.Rdata")
+
+
+```
+
+
+
+
+
+
+## Preparing **ZmatrixForUlcerativeColitisDataAnalysis.Rdata**
+
+Prepare the data yourself by downloading **Supplementary Table 2** and  **Supplementary Table 4** from the Supplementary Information of the paper <https://www.nature.com/articles/nbt.3603> available at   <https://www.nature.com/articles/nbt.3603#Sec3> and running the following R code chunk.
+This code assumes that the first 6 columns of Table 2 and Table 4, respectively, where saved as comma-delimited CSV files names DiscoveryPvaluesUC.csv and ValidationPvaluesUC.csv, respectively. 
+
+```{r}
+validationdat = read.table(file = "ValidationPvaluesUC.csv", sep=",", header=TRUE)
+head(validationdat)
+dim(validationdat)
+discoverydat = read.table(file = "discoveryPvaluesUC.csv", sep=",", header=TRUE)
+head(discoverydat)
+dim(discoverydat)
+
+#take only the probes that match both datasets
+out = match(validationdat[,1],discoverydat[,1] )
+ID = validationdat[!is.na(out),1]
+outvalidation = match(ID, validationdat[,1] )
+sum(!is.na(outvalidation))
+head(outvalidation)
+outdiscovery = match(ID,discoverydat[,1] )
+sum(!is.na(outdiscovery))
+head(outdiscovery)
+
+validationdat2 = validationdat[outvalidation,]
+discoverydat2 = discoverydat[outdiscovery,]
+head(validationdat2)
+head(discoverydat2)
+
+#transrom to z-scores the down regulated and up regulated meta-analysis p-values
+validationzup = qnorm(validationdat2[,5])
+validationzdown = qnorm(validationdat2[,4])
+summary(validationzup)
+summary(validationzdown)
+
+
+discoveryzup = qnorm(discoverydat2[,5])
+discoveryzdown = qnorm(discoverydat2[,4])
+summary(discoveryzup)
+summary(discoveryzdown)
+
+
+#in order to avoid fittign a mixture model to a z-score vector with entries at -infty and infty (corresponding to meta-analysis pvalues of zero or one), randomly draw a z-score centered at -6 and 6 (with sd of one) to replace a z-score smaller than -6 or greater than 6.  
+print(c(sum(validationzup>6), sum(validationzup<(-6))))
+vzup = validationzup
+vzup[validationzup>6] =rnorm(sum(validationzup>6),6,1)
+vzup[validationzup<(-6)] = rnorm(sum(validationzup<(-6)),-6,1)
+hist(vzup)
+summary(vzup)
+
+
+print(c(sum(validationzdown>6), sum(validationzdown<(-6))))
+vzdown = validationzdown
+vzdown[validationzdown>6] =rnorm(sum(validationzdown>6),6,1)
+vzdown[validationzdown<(-6)] = rnorm(sum(validationzdown<(-6)),-6,1)
+hist(vzdown)
+summary(vzdown)
+
+
+print(c(sum(discoveryzup>6), sum(discoveryzup<(-6))))
+dzup = discoveryzup
+dzup[discoveryzup>6] =rnorm(sum(discoveryzup>6),6,1)
+dzup[discoveryzup<(-6)] = rnorm(sum(discoveryzup<(-6)),-6,1)
+hist(dzup)
+summary(dzup)
+
+
+print(c(sum(discoveryzdown>6), sum(discoveryzdown<(-6))))
+dzdown = discoveryzdown
+dzdown[discoveryzdown>6] =rnorm(sum(discoveryzdown>6),6,1)
+dzdown[discoveryzdown<(-6)] = rnorm(sum(discoveryzdown<(-6)),-6,1)
+hist(dzdown)
+summary(dzdown)
+
+Zmatrix = data.frame(dzup = dzup, dzdown = dzdown, vzup = vzup, vzdown = vzdown)
+
+#save(Zmatrix, file ="ZmatrixForUlcerativeColitisDataAnalysis.Rdata")
+```

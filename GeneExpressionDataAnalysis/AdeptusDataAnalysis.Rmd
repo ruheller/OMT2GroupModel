@@ -1,0 +1,232 @@
+---
+title: "Analysis of gene expression studies from the Adeptus database"
+output: html_document
+---
+
+
+
+
+This folder contains the code for reproducing the  the results found in  the "Gene expression analysis in the ADEPTUS database" section of the paper. 
+
+
+
+ load the z-scores,  and source the functions used for the computation of the mixture components and est-OMT-FDR.  
+
+
+```{r}
+
+load("ZmatrixForAdeptusDataAnalysis.Rdata")
+source("functions.R")
+
+
+K = dim(Zmatrix)[1] #the number of z-scores
+n = dim(Zmatrix)[2] #the number of studies
+
+alpha = 0.05 #the nominal level of the FDR 
+
+
+
+```
+
+Estimate the mixture parameters and find the optimal mu for each study. The search for optimal mu takes a while. All the relevant estimates are saved in  **forAdeptusAnalysis.Rdata**. 
+
+```{r, eval=FALSE}
+
+muOMTsub = rep(NA,n)
+mbestsub = rep(NA,n)
+propvecsub = matrix(NA, nrow = n, ncol =3 )
+cvvecsub = matrix(NA, nrow = n, ncol =3 )
+sigmavecsub = matrix(NA, nrow = n, ncol =3 )
+for (k in 1:n){
+  print(k)  
+
+  #estimate mixure of three components, with a standard normal null component
+  zv = Zmatrix[,k]
+  
+  out = mixFdr(zv, J=3, theonull=TRUE, nearlyNull = 0, maxIter = 1000000, tol = 0.0000001)
+  propvec = out$pi
+  print(propvec)
+  cvvec = out$mu
+    print(cvvec)
+  sigmavec = out$sigma
+    print(sigmavec)
+ 
+  #For est-OMT-FDR: search for the optimal mu given the mixture parameter
+  mus = seq(4500,15000,5)
+  murange = 4000
+  muOMT = findmuOMT(K, propvec, cvvec, sigmavec, alternative = "two.sided", alpha = 0.05, mus = mus, murange=murange, maxiter= 10000) 
+    
+    
+  muOMTsub[k] = muOMT
+  propvecsub[k,] = propvec
+  cvvecsub[k,] = cvvec
+  sigmavecsub[k,] =sigmavec
+  
+ save(muOMTsub, propvecsub,cvvecsub,sigmavecsub,K, alpha, file = "forAdeptusAnalysis.Rdata")
+}  
+
+
+
+```
+
+The above chunk can take few hours. The values I obtained from this chunk to be used for inference are as follows. A rerun of the above chunk should produce very similar results for the 
+parameters muOMT, propvec, cvvec, sigmavec given below. 
+
+```{r}
+
+propvecsub=rbind(c(0.7237604, 0.14321848, 0.1330212), 
+c(0.6973143, 0.17865549, 0.1240302),
+c(0.5984410, 0.13548696, 0.2660721),
+c(0.7794409, 0.06896477, 0.1515943),
+c( 0.7093972, 0.16059755, 0.1300053),
+c( 0.7604744, 0.12429841, 0.1152272),
+c(0.7534309, 0.14415384, 0.1024153),
+c(0.8009549, 0.09628330, 0.1027618),
+c(0.6696216, 0.10640224, 0.2239761),
+c(0.6105600, 0.15829223, 0.2311478),
+c(0.6253181, 0.23448216, 0.1401998),
+c(0.7694249, 0.10748068, 0.1230945),
+c(0.6457193, 0.16646168, 0.1878190),
+c(0.7057369, 0.16179655, 0.1324665),
+c(0.7892440, 0.09758552, 0.1131704),
+c(0.5717463, 0.2344249, 0.1938288),
+c(0.6933383, 0.1486552, 0.1580065),
+c(0.6395303, 0.1570444, 0.2034253),
+c(0.6118895, 0.1632268, 0.2248837),
+c(0.7178983, 0.1074405, 0.1746612))
+
+
+cvvecsub=rbind(c(0,  2.668802, -2.873015),
+c(0, -2.351996,  2.419971),
+c(0, -2.937863,  2.657250),
+c(0, -2.202012,  2.104547),
+c(0, -2.600709,  2.355545),
+c(0, -2.085812,  2.123627),
+c(0, -1.816967,  1.955128),
+c(0,  2.444660, -2.378311),
+c(0, -2.691411,  2.648295),
+c(0,  3.325779, -2.890543),
+c(0,  2.490071, -2.871497),
+c(0, -2.841544,  2.673550),
+c(0,  2.663698, -2.471895),
+c(0, -2.883237,  3.018286),
+c(0, -2.446458,  2.185378),
+c(0,  2.602423, -2.166549),
+c(0, -3.024626,  2.974979),
+c(0, -2.930844,  2.748914),
+c(0, -2.435372,  2.413750),
+c(0, -3.320121,  2.779174))
+
+
+
+sigmavecsub = 
+rbind(c(1, 1.025054, 1.083383),
+c(1, 1.000000, 1.000000),
+c(1, 1.000000, 1.000000),
+c(1, 1.000000, 1.000000),
+c(1, 1.000000, 1.000000),
+c(1, 1.000000, 1.000000),
+c(1, 1.000000, 1.000000),
+c(1, 1.000000, 1.000000),
+c(1, 1.088154, 1.000000),
+c(1, 1.279652, 1.207517),
+c(1, 1.000000, 1.000000),
+c(1, 1.024211, 1.059039),
+c(1, 1.000000, 1.000000),
+c(1, 1.204710, 1.004591),
+c(1, 1.000000, 1.000000),
+c(1, 1.000000, 1.000000),
+c(1, 1.197593, 1.116862),
+c(1, 1.000000, 1.019881),
+c(1, 1.000000, 1.000000),
+c(1, 1.505627, 1.041446))
+
+
+muOMTsub = c(9740.000, 12760.000, 14251.579,  7390.000, 11801.355,  7861.603,  5456.110,  7441.581, 12380.000,  9555.078, 14745.000,  8254.996, 14514.996,  8772.917,  7571.054,
+18110.386,  8555.000, 12296.038, 16885.000,  8040.588)
+
+
+```
+
+
+
+Compute the number of rejections with each method
+
+```{r}
+
+
+
+studyname = rep(NA,n)
+levvec = rep(NA, n)
+powvec = rep(NA, n)
+numrej = matrix(NA, nrow  =n, ncol = 4)
+
+for (k in 1:n){
+  print(colnames(Zmatrix)[k])
+   
+  zv = Zmatrix[,k]
+  muOMT = muOMTsub[k]
+  propvec = propvecsub[k,]
+  cvvec = cvvecsub[k,]
+  sigmavec = sigmavecsub[k,]
+
+  #find est-OMT-FDR number of discoveries  
+  Pz = marg.dense2sidedalternative(zv,propvec, cvvec, sigmavec)
+  Tz = scaled.null.dens(zv,propvec, cvvec, sigmavec, alternative = "two.sided")/Pz 
+  Tz = sort(Tz)
+  
+  maxK = ifelse(K>200, max(round(K*(1-propvec[1])),200),K)
+  az = 1-Tz[1:maxK]
+  bz = BZCpp(Tz[1:maxK])
+  Rz = az-muOMT*bz
+  Dz = DCpp(Rz)
+  
+  numrej[k,1]= sum(Dz==1) 
+  
+  #---number of discoveries by competitors: 
+  #est-OMT-mFDR
+ numrej[k,2] = max(which(cumsum(Tz)/(1:length(Tz))<alpha))
+ 
+  
+  #adaptive BH
+  numrej[k,3] = sum(p.adjust(2*pnorm(-abs(zv)), method = "BH")<=(alpha/propvec[1]))
+  
+  #BH
+  numrej[k,4] = sum(p.adjust(2*pnorm(-abs(zv)), method = "BH")<=(alpha))
+  
+}
+  
+colnames(numrej)=c("est-OMT-FDR","est-OMT-mFDR", "adaptive BH", "BH" )
+print(numrej)
+plot(numrej[,1], numrej[,2], xlab = "est-OMT-FDR # rejections", main = "The number of discoveries of competitors versus est-OMT-FDR", ylim = c(0, max(numrej)), ylab = "competitor # rejections")
+abline(0,1)
+points(numrej[,1], numrej[,3], col= "blue", pch = 2)
+points(numrej[,1], numrej[,4], col= "red", pch = 3)
+
+legend(0,4000, legend = c("est-OMT-mFDR", "adaptive BH", "BH"), pch = c(1,2,3), col = c("black", "blue", "red"))
+
+boxplot(numrej)
+  
+
+
+
+```
+
+
+Figure 1 in the paper
+
+```{r}
+
+pdf("AdeptusFig.pdf")
+
+plot(numrej[,1], numrej[,2], xlab = "est-OMT-FDR # rejections", ylim = c(0, max(numrej)), ylab = "competitor # rejections", pch=4, col="black")
+abline(0,1)
+points(numrej[,1], numrej[,2], col= "black", pch = 4)
+points(numrej[,1], numrej[,3], col= "blue", pch = 2)
+points(numrej[,1], numrej[,4], col= "red", pch = 3)
+legend(0,4000, legend = c("est-OMT-mFDR", "adaptive BH", "BH"), pch = c(4,2,3), col = c("black", "blue", "red"))
+
+
+dev.off()
+```
+

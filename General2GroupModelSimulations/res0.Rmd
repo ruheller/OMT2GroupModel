@@ -1,0 +1,31 @@
+---
+title: "Results of simulation comparing OMT procedures to alternatives for dependent test statistics"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Setting:  K=5000, blocks are of size 5, $\pi=0.3$.
+Within blocks the correlation is 0.5. Gain from taking dependence into account is huge, and difference between OMT-FDR=OMT-pFDR and OMT-mFDR negligible. 
+```{r, eval=TRUE}
+
+
+load("res_rho_p5_K_5000_var2_p01_maxiter_5000_cv_1p5.Rdata")
+print(c(muOMTFDR, mumarglocfdrFDR,muOMTpFDR, mumarglocfdrpFDR,muOMTmFDR, mumarglocfdrmFDR,muindOMTFDR,muindOMTpFDR,muindOMTmFDR))
+
+ print(table(rhovec))
+ colnames(R_mat)=c("OMTFDR", "marglocfdrFDR", "indOMTFDR","OMTpFDR", "marglocfdrpFDR", "indOMTpFDR","OMTmFDR", "marglocfdrmFDR", "indOMTmFDR", "estOMTmFDR", "adaptiveBH","BH")
+ colnames(V_mat)=colnames(R_mat)
+
+  Err=(cbind(apply(V_mat/pmax(R_mat,1),2,mean),apply(V_mat/pmax(R_mat,1),2,sum)/apply(R_mat>0,2,sum ), apply(V_mat,2,mean)/apply(R_mat,2,mean)))
+  colnames(Err)=c("FDR", "pFDR","mFDR")
+ 
+ fortab3=cbind(Err,apply(R_mat-V_mat,2,mean))
+ 
+ print(fortab3)
+```
+
+
