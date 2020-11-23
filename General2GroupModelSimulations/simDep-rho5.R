@@ -4,7 +4,7 @@ library(expm)
 library(Rcpp)
 library(devtools)
 
-source("functions.R")
+source("General2GroupModelSimulations/functions.R")
 
 #----------------------------------------for finding the policy-------------------------#
 #The parameters of the simulations
@@ -14,17 +14,17 @@ rhovec=rep(0.5, 1000) #  #the symmetric correlation in each independent block
 Kvec = rep(5, length(rhovec))  #the block sizes
 prob = 0.3 #the probability of being nonnull
 alpha=0.05
-mu=-1.5 #SR
+mu=-1.5 
 nb = length(Kvec) #the number of blocks
-#Saharon's objects
+
 block_matrices = block_sum_matrices = block_nones = block_detfacs = list()
-block_deltas=list()#SR
-block_invdeltas=list()#SR1
+block_deltas=list()
+block_invdeltas=list()
 for (b in 1:nb){
   ## RUN THIS ONCE PER BLOCK
   matrices = sum_matrices = nones = detfacs = list()
-  deltas = list() #SR
-  invdeltas = list() #SR1
+  deltas = list() 
+  invdeltas = list() 
   KMAX = Kvec[b]
   rho = rhovec[b]
   for (K in 1:KMAX){
@@ -32,8 +32,8 @@ for (b in 1:nb){
     matnow= matrix(nrow=0,ncol=K)
     nonenow=NULL
     detfacnow = NULL
-    deltnow = NULL #SR
-    invdeltnow = NULL #SR1
+    deltnow = NULL 
+    invdeltnow = NULL 
     bitmask = 2^(1:K)
     for (i in 0:(2^K-1)){
       fn = (i%%bitmask)>= bitmask/2
@@ -42,14 +42,14 @@ for (b in 1:nb){
       matnow = rbind(matnow, invmat)
       nonenow=c(nonenow, sum(fn))
       detfacnow = c(detfacnow, det(covmat)^(-0.5)) 
-      deltnow = c(deltnow, fn*mu) #SR
-      invdeltnow = c(invdeltnow, invmat%*%(fn*mu)) #SR1
+      deltnow = c(deltnow, fn*mu) 
+      invdeltnow = c(invdeltnow, invmat%*%(fn*mu)) 
     }
     matrices[[K]] = matnow
     nones[[K]]=nonenow
     detfacs[[K]]=detfacnow
-    deltas[[K]] = deltnow #SR
-    invdeltas[[K]] = invdeltnow #SR
+    deltas[[K]] = deltnow 
+    invdeltas[[K]] = invdeltnow 
     sum_matrix = matrix(nrow=0,ncol=2^K)
     for (i in 1:K){
       cols = ((0:(2^K-1))%%2^i) >= (2^i) / 2
@@ -61,8 +61,8 @@ for (b in 1:nb){
   block_sum_matrices[[b]] = sum_matrices
   block_nones[[b]] = nones
   block_detfacs[[b]]=detfacs
-  block_deltas[[b]] = deltas #SR
-  block_invdeltas[[b]] = invdeltas #SR1
+  block_deltas[[b]] = deltas 
+  block_invdeltas[[b]] = invdeltas 
 }
 
 #----------find muOMTFDR and muOMTpFDR---------
@@ -157,11 +157,11 @@ R_mat =   matrix(0, nrow =maxiter, ncol = 12 )
 #  minprob=lev = pow=ev=maxr=numeric(length(mus))
 for (iter in 1:maxiter){
   print(iter)
-  out = rbeta(var1, var2, mu, rhovec, Kvec, prob, withh=TRUE) #SR
+  out = rbeta(var1, var2, mu, rhovec, Kvec, prob, withh=TRUE) 
   blockbeta = out$block_beta
   vec_h=out$vec_h
   #for oracle rule
-  out = AandB(blockbeta, Kvec, block_matrices, block_deltas, block_invdeltas, block_sum_matrices,block_nones,block_detfacs) #SR+SR1
+  out = AandB(blockbeta, Kvec, block_matrices, block_deltas, block_invdeltas, block_sum_matrices,block_nones,block_detfacs) 
   a = out$a
   b=out$b
   #for marginal rule
@@ -169,7 +169,7 @@ for (iter in 1:maxiter){
   # Given beta for block of size K compute the locfdr values
   nb = length(blockbeta)
   for (nbi in 1:nb){
-    margprob = (1-prob)*dnorm(as.vector(blockbeta[[nbi]]), mean = 0, sd = sqrt(var1))+prob*dnorm(as.vector(blockbeta[[nbi]]), mean = mu, sd = sqrt(var1+var2)) # SR - need to check I used mu correctly
+    margprob = (1-prob)*dnorm(as.vector(blockbeta[[nbi]]), mean = 0, sd = sqrt(var1))+prob*dnorm(as.vector(blockbeta[[nbi]]), mean = mu, sd = sqrt(var1+var2)) 
     marglocfdr =c(marglocfdr, (1-prob)*dnorm(as.vector(blockbeta[[nbi]]), mean = 0, sd = sqrt(var1))/margprob)  
   }
   omarglocfdr = sort(marglocfdr)
@@ -307,7 +307,7 @@ boxplot(R_mat-V_mat)
 boxplot(V_mat)
 
 
-save("muOMTFDR", "mumarglocfdrFDR","muOMTpFDR", "mumarglocfdrpFDR","muOMTmFDR", "mumarglocfdrmFDR","muindOMTFDR","muindOMTpFDR","muindOMTmFDR","mu", "V_mat", "R_mat",  "var1", "var2", "rhovec","Kvec", "prob", "alpha", file = "D:\\Saharon\\20-04-21\\res_rho_p5_K_5000_var2_p01_maxiter_5000_cv_1p5.Rdata")
+save("muOMTFDR", "mumarglocfdrFDR","muOMTpFDR", "mumarglocfdrpFDR","muOMTmFDR", "mumarglocfdrmFDR","muindOMTFDR","muindOMTpFDR","muindOMTmFDR","mu", "V_mat", "R_mat",  "var1", "var2", "rhovec","Kvec", "prob", "alpha", file = "General2GroupModelSimulations/res_rho_p5_K_5000_var2_p01_maxiter_5000_cv_1p5.Rdata")
 
 
 
